@@ -101,6 +101,69 @@ def _build_sam(
         sam.load_state_dict(state_dict)
     return sam
 
+
+def _build_sam_encoder(
+        encoder_embed_dim,
+        encoder_depth,
+        encoder_num_heads,
+        encoder_global_attn_indexes,
+        checkpoint=None,
+        custom_img_size=1024
+):
+    vit_patch_size = 16
+
+    image_encoder = ImageEncoderViT(
+        depth=encoder_depth,
+        embed_dim=encoder_embed_dim,
+        img_size=custom_img_size,
+        mlp_ratio=4,
+        norm_layer=partial(torch.nn.LayerNorm, eps=1e-6),
+        num_heads=encoder_num_heads,
+        patch_size=vit_patch_size,
+        qkv_bias=True,
+        use_rel_pos=True,
+        global_attn_indexes=encoder_global_attn_indexes,
+        window_size=14,
+        out_chans=256,
+    )
+
+    if checkpoint is not None:
+        with open(checkpoint, "rb") as f:
+            state_dict = torch.load(f)
+        image_encoder.load_state_dict(state_dict)
+
+    return image_encoder
+
+def build_sam_encoder_h(checkpoint=None, custom_img_size=1024):
+    return _build_sam_encoder(
+        encoder_embed_dim=1280,
+        encoder_depth=32,
+        encoder_num_heads=16,
+        encoder_global_attn_indexes=[7, 15, 23, 31],
+        checkpoint=checkpoint,
+        custom_img_size=custom_img_size,
+    )
+
+def build_sam_encoder_l(checkpoint=None, custom_img_size=1024):
+    return _build_sam_encoder(
+        encoder_embed_dim=1024,
+        encoder_depth=24,
+        encoder_num_heads=16,
+        encoder_global_attn_indexes=[5, 11, 17, 23],
+        checkpoint=checkpoint,
+        custom_img_size=custom_img_size,
+    )
+
+def build_sam_encoder_b(checkpoint=None, custom_img_size=1024):
+    return _build_sam_encoder(
+        encoder_embed_dim=768,
+        encoder_depth=12,
+        encoder_num_heads=12,
+        encoder_global_attn_indexes=[2, 5, 8, 11],
+        checkpoint=checkpoint,
+        custom_img_size=custom_img_size,
+    )
+
 # Mobile-SAM
 def build_sam_vit_t(checkpoint=None, custom_img_size=1024):
     prompt_embed_dim = 256
@@ -153,6 +216,27 @@ def build_sam_vit_t(checkpoint=None, custom_img_size=1024):
         mobile_sam.load_state_dict(state_dict)
     return mobile_sam
 
+def _build_student_encoder():
+    vit_patch_size = 16
+
+    image_encoder = TinyViT(
+        img_size=1024,
+        in_chans=3,
+        num_classes=1000,
+        embed_dims=[64, 128, 160, 320],
+        depths=[2, 2, 6, 2],
+        num_heads=[2, 4, 5, 10],
+        window_sizes=[7, 7, 14, 7],
+        mlp_ratio=4.,
+        drop_rate=0.,
+        drop_path_rate=0.0,
+        use_checkpoint=False,
+        mbconv_expand_ratio=4.0,
+        local_conv_size=3,
+        layer_lr_decay=0.8
+    )
+
+    return image_encoder
 
 sam_model_registry = {
     "default": build_sam_vit_h,
@@ -160,4 +244,8 @@ sam_model_registry = {
     "vit_l": build_sam_vit_l,
     "vit_b": build_sam_vit_b,
     "vit_t": build_sam_vit_t,
+    "student_encoder": _build_student_encoder,
+    "sam_encoder_h": build_sam_encoder_h,
+    "sam_encoder_l": build_sam_encoder_l,
+    "sam_encoder_b": build_sam_encoder_b,
 }
