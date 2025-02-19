@@ -1,0 +1,6 @@
+- Generate Embeddings for each image using SAM-H prior to training
+- For distillation loss, we can use MSE loss between the teacher and student embeddings
+- For the density estimation loss, we can use MSE loss between the ground truth density map and the predicted density map
+- Try to use this repository for SAM with varying image sizes [Repository](https://github.com/ByungKwanLee/Full-Segment-Anything)
+- Decide on whether you want to use a decoder or not.
+- Decide on the architecture of the student network

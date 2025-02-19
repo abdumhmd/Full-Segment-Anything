@@ -131,6 +131,7 @@ def _build_sam_encoder(
         with open(checkpoint, "rb") as f:
             state_dict = torch.load(f)
         image_encoder.load_state_dict(state_dict)
+        print("Loaded encoder from checkpoint")
 
     return image_encoder
 
