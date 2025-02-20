@@ -7,7 +7,7 @@ import torchmetrics
 import torchmetrics.regression
 
 class PointMe(pl.LightningModule):
-    def __init__(self, teacher, student, config):
+    def __init__(self, student, config):
         """
         Args:
             teacher: teacher model
@@ -15,7 +15,6 @@ class PointMe(pl.LightningModule):
             config: configuration dictionary
         """
         super().__init__()
-        self.teacher = teacher
         self.student = student
         
         self.config = config
@@ -54,7 +53,7 @@ class PointMe(pl.LightningModule):
         self.val_mse = torchmetrics.regression.MeanSquaredError()
         self.test_mse = torchmetrics.regression.MeanSquaredError()
         
-    def forward(self, batch, batch_idx):
+    def forward(self, batch):
         """
         Args:
             batch: input batch
@@ -62,40 +61,34 @@ class PointMe(pl.LightningModule):
             output: density map predictions
         """
         x = batch['image']
-        teacher_features, student_features = self.forward_encoder(x)
+        student_features = self._forward_encoder(x)
 
-        patch_indices = self.patch_locator(batch['points'], x.shape[-2:], self.config['patch_size'])
+        patch_indices = self._patch_locator(batch['points'], x.shape[-2:], self.config['patch_size'])
 
         # get the student features for each example
-        examples = self.extract_patch_features(student_features, patch_indices)
+        examples = self.__check_allowedextract_patch_features(student_features, patch_indices)
 
-        similarities = self.calculate_similarity(examples, student_features)
+        similarities = self._calculate_similarity(examples, student_features)
 
         enhanced_features = torch.cat([student_features, similarities], dim=1)
-        output = self.forward_decoder(enhanced_features)
+        output = self._forward_decoder(enhanced_features)
 
         return similarities, student_features, output
 
-
-
-    def forward_encoder(self, x):
+    def _forward_encoder(self, x):
         """
+        Extract features from the student model
         Args:
             x: input image
         Returns:
-            teacher_features: teacher encoder features
             student_features: student encoder features
         """
-        # teacher encoder
-        with torch.no_grad():
-            teacher_features = self.teacher(x)
-
         # student encoder
         student_features = self.student(x)
 
-        return teacher_features, student_features
+        return student_features
     
-    def calculate_similarity(self, examples, features):
+    def _calculate_similarity(self, examples, features):
         """
         Args:
             examples: Example features based on dots
@@ -123,8 +116,7 @@ class PointMe(pl.LightningModule):
 
         return similarities
 
-
-    def forward_decoder(self, enhanced_features):
+    def _forward_decoder(self, enhanced_features):
         """
         Adapted from: https://github.com/abdumhmd/CounTX/blob/6e2af6403105984c2bd2a7aec45c517e1f535c76/models_counting_network.py#L135
         Args:
@@ -162,7 +154,7 @@ class PointMe(pl.LightningModule):
 
         return density_map
 
-    def patch_locator(self, points, img_size, patch_size):
+    def _patch_locator(self, points, img_size, patch_size):
         """
         Map batched points to patches
         Args:
@@ -194,7 +186,7 @@ class PointMe(pl.LightningModule):
 
         return patch_indices
     
-    def extract_patch_features(self, features, patch_indices):
+    def _extract_patch_features(self, features, patch_indices):
         """
         Extract features from patch embeddings using the given patch indices.
 
@@ -218,6 +210,41 @@ class PointMe(pl.LightningModule):
         ]
         return features.permute(0, 2, 1)
 
+    def training_step(self, batch, batch_idx):
+        _, student_features, output = self(batch)
+        loss = self.count_coef * self.counting_loss(output, batch['density_map']) + self.distill_coef * self.distillation_loss(student_features, batch['embedding'])
+
+        self.train_mae(output, batch['density_map'])
+        self.train_mse(output, batch['density_map'])
+
+        self.log('train_loss', loss)
+        self.log('train_mae', self.train_mae, on_epoch=True, on_step=True)
+        self.log('train_mse', self.train_mse, on_epoch=True, on_step=True)
+        return loss
+    
+    def validation_step(self, batch, batch_idx):
+        _, student_features, output = self(batch)
+        loss = self.count_coef * self.counting_loss(output, batch['density_map']) + self.distill_coef * self.distillation_loss(student_features, batch['embedding'])
+
+        self.val_mae(output, batch['density_map'])
+        self.val_mse(output, batch['density_map'])
+
+        self.log('val_loss', loss)
+        self.log('val_mae', self.val_mae, on_epoch=True)
+        self.log('val_mse', self.val_mse, on_epoch=True)
+        return loss
+    
+    def test_step(self, batch, batch_idx):
+        _, student_features, output = self(batch)
+        loss = self.count_coef * self.counting_loss(output, batch['density_map']) + self.distill_coef * self.distillation_loss(student_features, batch['embedding'])
+
+        self.test_mae(output, batch['density_map'])
+        self.test_mse(output, batch['density_map'])
+
+        self.log('test_loss', loss)
+        self.log('test_mae', self.test_mae, on_epoch=True)
+        self.log('test_mse', self.test_mse, on_epoch=True)
+        return loss
 
 # from tiny_vit import TinyViT
 
