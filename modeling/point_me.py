@@ -212,7 +212,7 @@ class PointMe(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         _, student_features, output = self(batch)
-        loss = self.count_coef * self.counting_loss(output, batch['density_map']) + self.distill_coef * self.distillation_loss(student_features, batch['embedding'])
+        loss = self.config['count_coef'] * self.counting_loss(output, batch['density_map']) + self.config['distill_coef'] * self.distillation_loss(student_features, batch['embedding'])
 
         self.train_mae(output, batch['density_map'])
         self.train_mse(output, batch['density_map'])
@@ -224,7 +224,7 @@ class PointMe(pl.LightningModule):
     
     def validation_step(self, batch, batch_idx):
         _, student_features, output = self(batch)
-        loss = self.count_coef * self.counting_loss(output, batch['density_map']) + self.distill_coef * self.distillation_loss(student_features, batch['embedding'])
+        loss = self.config['count_coef'] * self.counting_loss(output, batch['density_map']) + self.config['distill_coef'] * self.distillation_loss(student_features, batch['embedding'])
 
         self.val_mae(output, batch['density_map'])
         self.val_mse(output, batch['density_map'])
@@ -236,7 +236,7 @@ class PointMe(pl.LightningModule):
     
     def test_step(self, batch, batch_idx):
         _, student_features, output = self(batch)
-        loss = self.count_coef * self.counting_loss(output, batch['density_map']) + self.distill_coef * self.distillation_loss(student_features, batch['embedding'])
+        loss = self.config['count_coef'] * self.counting_loss(output, batch['density_map']) + self.config['distill_coef'] * self.distillation_loss(student_features, batch['embedding'])
 
         self.test_mae(output, batch['density_map'])
         self.test_mse(output, batch['density_map'])
