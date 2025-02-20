@@ -246,6 +246,10 @@ class PointMe(pl.LightningModule):
         self.log('test_mse', self.test_mse, on_epoch=True)
         return loss
 
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.config['lr'])
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+        return [optimizer], [scheduler]
 # from tiny_vit import TinyViT
 
 
