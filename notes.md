@@ -4,3 +4,4 @@
 - Try to use this repository for SAM with varying image sizes [Repository](https://github.com/ByungKwanLee/Full-Segment-Anything)
 - Decide on whether you want to use a decoder or not.
 - Decide on the architecture of the student network
+- Convert FSC-147 dataset to have point prompts

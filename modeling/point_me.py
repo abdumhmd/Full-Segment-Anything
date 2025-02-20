@@ -88,10 +88,10 @@ class PointMe(pl.LightningModule):
         """
         # teacher encoder
         with torch.no_grad():
-            teacher_features = self.teacher.encoder(x)
+            teacher_features = self.teacher(x)
 
         # student encoder
-        student_features = self.student.encoder(x)
+        student_features = self.student(x)
 
         return teacher_features, student_features
     
@@ -217,3 +217,73 @@ class PointMe(pl.LightningModule):
             col_indices,
         ]
         return features.permute(0, 2, 1)
+
+
+# from tiny_vit import TinyViT
+
+
+# student = TinyViT(
+
+#         img_size=1024,
+#         in_chans=3,
+#         num_classes=1000,
+#         embed_dims=[64, 128, 160, 320],
+#         depths=[2, 2, 6, 2],
+#         num_heads=[2, 4, 5, 10],
+#         window_sizes=[7, 7, 14, 7],
+#         mlp_ratio=4.,
+#         drop_rate=0.,
+#         drop_path_rate=0.0,
+#         use_checkpoint=False,
+#         mbconv_expand_ratio=4.0,
+#         local_conv_size=3,
+#         layer_lr_decay=0.8
+#     )
+
+
+
+# image_encoder = TinyViT(
+#         img_size=1024,
+#         in_chans=3,
+#         num_classes=1000,
+#         embed_dims=[64, 128, 160, 320],
+#         depths=[2, 2, 6, 2],
+#         num_heads=[2, 4, 5, 10],
+#         window_sizes=[7, 7, 14, 7],
+#         mlp_ratio=4.,
+#         drop_rate=0.,
+#         drop_path_rate=0.0,
+#         use_checkpoint=False,
+#         mbconv_expand_ratio=4.0,
+#         local_conv_size=3,
+#         layer_lr_decay=0.8
+#     )
+
+# config = {
+#     'patch_size': 16
+# }
+
+# model = PointMe(image_encoder, student, config)
+
+# # random input
+# x = torch.randn(2, 3, 256, 256)
+
+# # random points 3 points for each image
+# points = torch.randint(0, 256, (2, 3, 2))
+
+# teacher_features, student_features = model.forward_encoder(x)
+# print(f"Teacher features: {teacher_features.shape}")
+# print(f"Student features: {student_features.shape}")
+
+# patch_indices = model.patch_locator(points, x.shape[-2:], config['patch_size'])
+# print(f"Patch indices: {patch_indices.shape}")
+
+# examples = model.extract_patch_features(student_features, patch_indices)
+# print(f"Examples: {examples.shape}")
+
+# similarities = model.calculate_similarity(examples, student_features)
+# print(f"Similarities: {similarities.shape}")
+
+# enhanced_features = torch.cat([student_features, similarities], dim=1)
+# output = model.forward_decoder(enhanced_features)
+# print(f"Output: {output.shape}")

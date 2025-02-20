@@ -218,8 +218,6 @@ def build_sam_vit_t(checkpoint=None, custom_img_size=1024):
     return mobile_sam
 
 def _build_student_encoder():
-    vit_patch_size = 16
-
     image_encoder = TinyViT(
         img_size=1024,
         in_chans=3,
