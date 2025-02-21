@@ -250,6 +250,10 @@ class PointMe(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.config['lr'])
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
         return [optimizer], [scheduler]
+
+
+
+''' Testing the model
 # from tiny_vit import TinyViT
 
 
@@ -318,3 +322,5 @@ class PointMe(pl.LightningModule):
 # enhanced_features = torch.cat([student_features, similarities], dim=1)
 # output = model.forward_decoder(enhanced_features)
 # print(f"Output: {output.shape}")
+
+'''
