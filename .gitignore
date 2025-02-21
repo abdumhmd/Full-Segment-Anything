@@ -9,3 +9,6 @@ figure/figure2.jpg
 figure/paris.jpg
 figure/paris2.jpg
 .vscode
+
+lightning_logs/
+wandb/

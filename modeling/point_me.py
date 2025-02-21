@@ -63,21 +63,24 @@ class PointMe(pl.LightningModule):
         x = batch["image"]
         student_features = self._forward_encoder(x)
 
+        if self.config["stage"] == "distillation":
+            return student_features
+
         patch_indices = self._patch_locator(
-            batch["points"], x.shape[-2:], self.config["patch_size"]
+            batch["cell_locs"], x.shape[-2:], self.config["patch_size"]
         )
 
         # get the student features for each example
-        examples = self.__check_allowedextract_patch_features(
+        examples = self._extract_patch_features(
             student_features, patch_indices
         )
 
         similarities = self._calculate_similarity(examples, student_features)
 
         enhanced_features = torch.cat([student_features, similarities], dim=1)
-        output = self._forward_decoder(enhanced_features)
+        dmap = self._forward_decoder(enhanced_features)
 
-        return similarities, student_features, output
+        return similarities, dmap
 
     def _forward_encoder(self, x):
         """
@@ -217,63 +220,69 @@ class PointMe(pl.LightningModule):
         return features.permute(0, 2, 1)
 
     def training_step(self, batch, batch_idx):
-        _, student_features, output = self(batch)
+        
 
         if self.config['stage'] == 'distillation':
+            student_features = self(batch)
             loss = self.config["distill_coef"] * self.distillation_loss(
-                student_features, batch["embedding"]
+                student_features, batch["embeddings"]
             )
         else:
+            _, dmap = self(batch)
             loss = self.config["count_coef"] * self.counting_loss(
-                output, batch["density_map"]
+                dmap, batch["density_map"]
             ) 
 
-        self.train_mae(output, batch["density_map"])
-        self.train_mse(output, batch["density_map"])
+            self.train_mae(dmap, batch["density_map"])
+            self.train_mse(dmap, batch["density_map"])
+            self.log("train_mae", self.train_mae, on_epoch=True, on_step=True, prog_bar=True)
+            self.log("train_mse", self.train_mse, on_epoch=True, on_step=True, prog_bar=True)
 
-        self.log("train_loss", loss)
-        self.log("train_mae", self.train_mae, on_epoch=True, on_step=True)
-        self.log("train_mse", self.train_mse, on_epoch=True, on_step=True)
+        self.log("train_loss", loss, prog_bar=True)
+        
         return loss
 
     def validation_step(self, batch, batch_idx):
-        _, student_features, output = self(batch)
-        
+    
         if self.config['stage'] == 'distillation':
+            student_features = self(batch)
             loss = self.config["distill_coef"] * self.distillation_loss(
-                student_features, batch["embedding"]
+                student_features, batch["embeddings"]
             )
         else:
+            _, dmap = self(batch)
             loss = self.config["count_coef"] * self.counting_loss(
-                output, batch["density_map"]
+                dmap, batch["density_map"]
             )
 
-        self.val_mae(output, batch["density_map"])
-        self.val_mse(output, batch["density_map"])
+            self.val_mae(dmap, batch["density_map"])
+            self.val_mse(dmap, batch["density_map"])
+            self.log("val_mae", self.val_mae, on_epoch=True, prog_bar=True)
+            self.log("val_mse", self.val_mse, on_epoch=True, prog_bar=True)
 
-        self.log("val_loss", loss)
-        self.log("val_mae", self.val_mae, on_epoch=True)
-        self.log("val_mse", self.val_mse, on_epoch=True)
+        self.log("val_loss", loss, prog_bar=True)
+        
         return loss
 
     def test_step(self, batch, batch_idx):
-        _, student_features, output = self(batch)
-        
+    
         if self.config['stage'] == 'distillation':
+            student_features = self(batch)
             loss = self.config["distill_coef"] * self.distillation_loss(
-                student_features, batch["embedding"]
+                student_features, batch["embeddings"]
             )
         else:
+            _, dmap = self(batch)
             loss = self.config["count_coef"] * self.counting_loss(
-                output, batch["density_map"]
+                dmap, batch["density_map"]
             )
 
-        self.test_mae(output, batch["density_map"])
-        self.test_mse(output, batch["density_map"])
+            self.test_mae(dmap, batch["density_map"])
+            self.test_mse(dmap, batch["density_map"])
+            self.log("test_mae", self.test_mae, on_epoch=True, prog_bar=True)
+            self.log("test_mse", self.test_mse, on_epoch=True, prog_bar=True)
 
-        self.log("test_loss", loss)
-        self.log("test_mae", self.test_mae, on_epoch=True)
-        self.log("test_mse", self.test_mse, on_epoch=True)
+        self.log("test_loss", loss, prog_bar=True)
         return loss
 
     def configure_optimizers(self):

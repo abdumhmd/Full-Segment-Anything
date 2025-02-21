@@ -32,10 +32,10 @@ class DistillationDataset(Dataset):
     def __getitem__(self, idx):
         img_path = self.img_list[idx]
         img = Image.open(img_path).convert('RGB')
-        img = self.transform(img).unsqueeze(0)
+        img = self.transform(image = np.array(img))['image'].float()
+
         
-        embeddings = torch.load(img_path.replace('.png', '.npy').replace('images', 'embeddings'))
-        embeddings = torch.tensor(embeddings, dtype=torch.float32)
+        embeddings = torch.load(img_path.replace('.png', '.npy').replace('images', 'embeddings')).squeeze(0)
 
         return {"image": img, "embeddings": embeddings}
     
