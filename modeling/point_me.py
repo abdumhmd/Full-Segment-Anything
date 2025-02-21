@@ -6,6 +6,7 @@ import lightning as pl
 import torchmetrics
 import torchmetrics.regression
 
+
 class PointMe(pl.LightningModule):
     def __init__(self, student, config):
         """
@@ -16,7 +17,7 @@ class PointMe(pl.LightningModule):
         """
         super().__init__()
         self.student = student
-        
+
         self.config = config
 
         self.decoder_block1 = nn.Sequential(
@@ -40,10 +41,9 @@ class PointMe(pl.LightningModule):
             nn.ReLU(inplace=True),
             nn.Conv2d(256, 1, kernel_size=1, stride=1),
         )
-        
-        
-        self.counting_loss = nn.MSELoss(reduction='mean')
-        self.distillation_loss = nn.MSELoss(reduction='mean')
+
+        self.counting_loss = nn.MSELoss(reduction="mean")
+        self.distillation_loss = nn.MSELoss(reduction="mean")
 
         self.train_mae = torchmetrics.regression.MeanAbsoluteError()
         self.val_mae = torchmetrics.regression.MeanAbsoluteError()
@@ -52,7 +52,7 @@ class PointMe(pl.LightningModule):
         self.train_mse = torchmetrics.regression.MeanSquaredError()
         self.val_mse = torchmetrics.regression.MeanSquaredError()
         self.test_mse = torchmetrics.regression.MeanSquaredError()
-        
+
     def forward(self, batch):
         """
         Args:
@@ -60,13 +60,17 @@ class PointMe(pl.LightningModule):
         Returns:
             output: density map predictions
         """
-        x = batch['image']
+        x = batch["image"]
         student_features = self._forward_encoder(x)
 
-        patch_indices = self._patch_locator(batch['points'], x.shape[-2:], self.config['patch_size'])
+        patch_indices = self._patch_locator(
+            batch["points"], x.shape[-2:], self.config["patch_size"]
+        )
 
         # get the student features for each example
-        examples = self.__check_allowedextract_patch_features(student_features, patch_indices)
+        examples = self.__check_allowedextract_patch_features(
+            student_features, patch_indices
+        )
 
         similarities = self._calculate_similarity(examples, student_features)
 
@@ -87,7 +91,7 @@ class PointMe(pl.LightningModule):
         student_features = self.student(x)
 
         return student_features
-    
+
     def _calculate_similarity(self, examples, features):
         """
         Args:
@@ -98,7 +102,7 @@ class PointMe(pl.LightningModule):
         """
         # flatten the features (N, C, H, W) -> (N, C, H * W)
         features_flat = features.view(features.size(0), features.size(1), -1)
-    
+
         # expand the examples (N, K, C) -> (N, K, C, 1)
         examples_expanded = examples.unsqueeze(-1)
 
@@ -109,7 +113,9 @@ class PointMe(pl.LightningModule):
         dist_sq = torch.sum((examples_expanded - features_expanded) ** 2, dim=1)
 
         # reshape the distance (N, K, H * W) -> (N, K, H, W)
-        dist_sq = dist_sq.view(dist_sq.size(0), dist_sq.size(1), features.size(2), features.size(3))
+        dist_sq = dist_sq.view(
+            dist_sq.size(0), dist_sq.size(1), features.size(2), features.size(3)
+        )
 
         # compute the similarity using a log based function
         similarities = torch.log((dist_sq + 1) / (dist_sq + 1e-4))
@@ -126,30 +132,30 @@ class PointMe(pl.LightningModule):
         """
         density_map = F.interpolate(
             self.decoder_block1(enhanced_features),
-            size = enhanced_features.shape[-1] * 2,
-            mode = 'bilinear',
-            align_corners = False,
+            size=enhanced_features.shape[-1] * 2,
+            mode="bilinear",
+            align_corners=False,
         )
 
         density_map = F.interpolate(
             self.decoder_block2(density_map),
-            size = enhanced_features.shape[-1] * 4,
-            mode = 'bilinear',
-            align_corners = False,
+            size=enhanced_features.shape[-1] * 4,
+            mode="bilinear",
+            align_corners=False,
         )
 
         density_map = F.interpolate(
             self.decoder_block3(density_map),
-            size = enhanced_features.shape[-1] * 8,
-            mode = 'bilinear',
-            align_corners = False,
+            size=enhanced_features.shape[-1] * 8,
+            mode="bilinear",
+            align_corners=False,
         )
 
         density_map = F.interpolate(
             self.decoder_block4(density_map),
-            size = enhanced_features.shape[-1] * 16,
-            mode = 'bilinear',
-            align_corners = False,
+            size=enhanced_features.shape[-1] * 16,
+            mode="bilinear",
+            align_corners=False,
         )
 
         return density_map
@@ -162,7 +168,7 @@ class PointMe(pl.LightningModule):
             img_size: Tuple containing the image size (H, W)
             patch_size: size of each patch (E.g. 16 for ViT-Base)
         Returns:
-            patch_indices: Tensor of shape (N, K, 2) with patch indices (row, col) 
+            patch_indices: Tensor of shape (N, K, 2) with patch indices (row, col)
         """
         assert points.dim() == 3 and points.shape[-1] == 2, "Invalid shape for points"
 
@@ -181,11 +187,11 @@ class PointMe(pl.LightningModule):
         patch_indices = torch.div(
             points_clamped,
             torch.tensor([ph, pw], device=points.device, dtype=torch.float32),
-            rounding_mode='floor',
+            rounding_mode="floor",
         ).long()
 
         return patch_indices
-    
+
     def _extract_patch_features(self, features, patch_indices):
         """
         Extract features from patch embeddings using the given patch indices.
@@ -212,48 +218,71 @@ class PointMe(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         _, student_features, output = self(batch)
-        loss = self.config['count_coef'] * self.counting_loss(output, batch['density_map']) + self.config['distill_coef'] * self.distillation_loss(student_features, batch['embedding'])
 
-        self.train_mae(output, batch['density_map'])
-        self.train_mse(output, batch['density_map'])
+        if self.config['stage'] == 'distillation':
+            loss = self.config["distill_coef"] * self.distillation_loss(
+                student_features, batch["embedding"]
+            )
+        else:
+            loss = self.config["count_coef"] * self.counting_loss(
+                output, batch["density_map"]
+            ) 
 
-        self.log('train_loss', loss)
-        self.log('train_mae', self.train_mae, on_epoch=True, on_step=True)
-        self.log('train_mse', self.train_mse, on_epoch=True, on_step=True)
+        self.train_mae(output, batch["density_map"])
+        self.train_mse(output, batch["density_map"])
+
+        self.log("train_loss", loss)
+        self.log("train_mae", self.train_mae, on_epoch=True, on_step=True)
+        self.log("train_mse", self.train_mse, on_epoch=True, on_step=True)
         return loss
-    
+
     def validation_step(self, batch, batch_idx):
         _, student_features, output = self(batch)
-        loss = self.config['count_coef'] * self.counting_loss(output, batch['density_map']) + self.config['distill_coef'] * self.distillation_loss(student_features, batch['embedding'])
+        
+        if self.config['stage'] == 'distillation':
+            loss = self.config["distill_coef"] * self.distillation_loss(
+                student_features, batch["embedding"]
+            )
+        else:
+            loss = self.config["count_coef"] * self.counting_loss(
+                output, batch["density_map"]
+            )
 
-        self.val_mae(output, batch['density_map'])
-        self.val_mse(output, batch['density_map'])
+        self.val_mae(output, batch["density_map"])
+        self.val_mse(output, batch["density_map"])
 
-        self.log('val_loss', loss)
-        self.log('val_mae', self.val_mae, on_epoch=True)
-        self.log('val_mse', self.val_mse, on_epoch=True)
+        self.log("val_loss", loss)
+        self.log("val_mae", self.val_mae, on_epoch=True)
+        self.log("val_mse", self.val_mse, on_epoch=True)
         return loss
-    
+
     def test_step(self, batch, batch_idx):
         _, student_features, output = self(batch)
-        loss = self.config['count_coef'] * self.counting_loss(output, batch['density_map']) + self.config['distill_coef'] * self.distillation_loss(student_features, batch['embedding'])
+        
+        if self.config['stage'] == 'distillation':
+            loss = self.config["distill_coef"] * self.distillation_loss(
+                student_features, batch["embedding"]
+            )
+        else:
+            loss = self.config["count_coef"] * self.counting_loss(
+                output, batch["density_map"]
+            )
 
-        self.test_mae(output, batch['density_map'])
-        self.test_mse(output, batch['density_map'])
+        self.test_mae(output, batch["density_map"])
+        self.test_mse(output, batch["density_map"])
 
-        self.log('test_loss', loss)
-        self.log('test_mae', self.test_mae, on_epoch=True)
-        self.log('test_mse', self.test_mse, on_epoch=True)
+        self.log("test_loss", loss)
+        self.log("test_mae", self.test_mae, on_epoch=True)
+        self.log("test_mse", self.test_mse, on_epoch=True)
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.config['lr'])
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.config["lr"])
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
         return [optimizer], [scheduler]
 
 
-
-''' Testing the model
+""" Testing the model
 # from tiny_vit import TinyViT
 
 
@@ -323,4 +352,4 @@ class PointMe(pl.LightningModule):
 # output = model.forward_decoder(enhanced_features)
 # print(f"Output: {output.shape}")
 
-'''
+"""

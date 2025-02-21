@@ -3,30 +3,27 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
-from torchvision import transforms
 import h5py
 import pandas as pd
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
-class CellDataset(Dataset):
+class DistillationDataset(Dataset):
     '''
-        A custom dataset for end-to-end training of PointMe model.
+        A custom dataset for distillation of PointMe model.
+
         Args:
             - img_list: list of image paths
-            - augment: bool, whether to apply data augmentation or not (these are to be applied on input image, density map, cell locations and embeddings)
-
+            
         Returns:
-            - img: torch.Tensor, input image
-            - density_map: torch.Tensor, density map
-            - cell_locs: torch.Tensor, cell locations
-            - embeddings: torch.Tensor, embeddings
-
+            - A dictionary containing the following
+                - image: input image
+                - embeddings: embeddings from SAM-H model
     '''
-
-    def __init__(self, img_list, augment=False):
+    def __init__(self, img_list):
         self.img_list = img_list
-        self.augment = augment
-        self.transform = transforms.Compose([
-            transforms.ToTensor(),
+        self.transform = A.Compose([
+            ToTensorV2(),
         ])
 
     def __len__(self):
@@ -37,26 +34,57 @@ class CellDataset(Dataset):
         img = Image.open(img_path).convert('RGB')
         img = self.transform(img).unsqueeze(0)
         
-        dmap = h5py.File(img_path.replace('.png', '.h5').replace('images', 'densities'), 'r')
-        density_map = np.array(dmap['density'])
-        density_map = torch.tensor(density_map, dtype=torch.float32).unsqueeze(0)
-
-        cell_locs = pd.read_csv(img_path.replace('.png', '.csv').replace('images', 'points'))[['X', 'Y']].values
-        cell_locs = torch.tensor(cell_locs, dtype=torch.float32).unsqueeze(0)
-
-        embeddings = torch.load(img_path.replace('.png', '.npy').replace('images', 'embeddings'), map_location='cpu')
-        print(embeddings.shape)
+        embeddings = torch.load(img_path.replace('.png', '.npy').replace('images', 'embeddings'))
         embeddings = torch.tensor(embeddings, dtype=torch.float32)
 
-        if self.augment:
-            # Apply data augmentation here
-            pass
-        
+        return {"image": img, "embeddings": embeddings}
+    
+class CountingDataset(Dataset):
+    '''
+        A custom dataset for counting the number of cells in an image.
 
-        return {"image": img, "density_map": density_map, "cell_locs": cell_locs, "embeddings": embeddings}
+        Args:
+            - img_list: list of image paths
+            - augmentations: Albumentation augmentations to be applied on the images, points and density map
+            
+        Returns:
+            - A dictionary containing the following
+                - image: input image
+                - cell_locs: locations of prompt points
+                - density_map: density map of the image
+    '''
+    def __init__(self, img_list, augmentations=None):
+        self.img_list = img_list
+        self.augmentations = augmentations
+
+
+    def __len__(self):
+        return len(self.img_list)
+    
+    def __getitem__(self, idx):
+        img_path = self.img_list[idx]
+        img = Image.open(img_path).convert('RGB')
+        
+        dmap = h5py.File(img_path.replace('.png', '.h5').replace('images', 'densities'), 'r')
+        density_map = np.array(dmap['density'])
+        density_map = torch.tensor(density_map, dtype=torch.float32)
+
+        cell_locs = pd.read_csv(img_path.replace('.png', '.csv').replace('images', 'points'))[['X', 'Y']].values
+        cell_locs = torch.tensor(cell_locs, dtype=torch.float32)
+
+        if self.augmentations:
+            augmented = self.augmentations(image=img, keypoints=cell_locs, mask=density_map)
+            img = augmented['image']
+            cell_locs = augmented['keypoints']
+            density_map = augmented['mask']
+
+        return {"image": img, "cell_locs": cell_locs, "density_map": density_map}
     
 
-''' Testing the dataset 
+        
+
+
+''' Testing the dataset
 from glob import glob
 import matplotlib.pyplot as plt
 import cv2
@@ -77,9 +105,6 @@ img = img.squeeze(0).permute(1, 2, 0).numpy()
 density_map = example['density_map']
 cell_locs = example['cell_locs']
 embeddings = example['embeddings']
-
-
-
 
 print('Image shape:', img.shape)
 print('Density map shape:', density_map.shape)
@@ -108,5 +133,4 @@ plt.imshow(density_map.squeeze(0).squeeze(0))
 plt.title(f"{density_map.sum().item():.0f} Cells")
 plt.axis('off')
 plt.show()
-
 '''
