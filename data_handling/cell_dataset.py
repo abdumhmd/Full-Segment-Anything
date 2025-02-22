@@ -63,20 +63,20 @@ class CountingDataset(Dataset):
     
     def __getitem__(self, idx):
         img_path = self.img_list[idx]
-        img = Image.open(img_path).convert('RGB')
+        img = np.array(Image.open(img_path).convert('RGB'))
         
         dmap = h5py.File(img_path.replace('.png', '.h5').replace('images', 'densities'), 'r')
         density_map = np.array(dmap['density'])
-        density_map = torch.tensor(density_map, dtype=torch.float32)
+
 
         cell_locs = pd.read_csv(img_path.replace('.png', '.csv').replace('images', 'points'))[['X', 'Y']].values
-        cell_locs = torch.tensor(cell_locs, dtype=torch.float32)
+
 
         if self.augmentations:
             augmented = self.augmentations(image=img, keypoints=cell_locs, mask=density_map)
-            img = augmented['image']
+            img = augmented['image'].float()
             cell_locs = augmented['keypoints']
-            density_map = augmented['mask']
+            density_map = augmented['mask'].unsqueeze(0).float()
 
         return {"image": img, "cell_locs": cell_locs, "density_map": density_map}
     

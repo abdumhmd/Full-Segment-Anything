@@ -40,6 +40,7 @@ def train():
 
     model = PointMe(student, config)
 
+
     print("Successfully loaded the model")
 
     # Define the trainer

@@ -61,6 +61,7 @@ class PointMe(pl.LightningModule):
             output: density map predictions
         """
         x = batch["image"]
+
         student_features = self._forward_encoder(x)
 
         if self.config["stage"] == "distillation":
@@ -290,6 +291,33 @@ class PointMe(pl.LightningModule):
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
         return [optimizer], [scheduler]
 
+    def _freeze_student(self):
+        for param in self.student.parameters():
+            param.requires_grad = False
+
+    def _unfreeze_student(self):
+        for param in self.student.parameters():
+            param.requires_grad = True
+
+    def _freeze_decoder(self):
+        for param in self.decoder_block1.parameters():
+            param.requires_grad = False
+        for param in self.decoder_block2.parameters():
+            param.requires_grad = False
+        for param in self.decoder_block3.parameters():
+            param.requires_grad = False
+        for param in self.decoder_block4.parameters():
+            param.requires_grad = False
+
+    def _unfreeze_decoder(self):
+        for param in self.decoder_block1.parameters():
+            param.requires_grad = True
+        for param in self.decoder_block2.parameters():
+            param.requires_grad = True
+        for param in self.decoder_block3.parameters():
+            param.requires_grad = True
+        for param in self.decoder_block4.parameters():
+            param.requires_grad = True
 
 """ Testing the model
 # from tiny_vit import TinyViT
