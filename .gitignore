@@ -12,4 +12,9 @@ figure/paris2.jpg
 
 lightning_logs/
 wandb/
+
+# all .ipynb_checkpoints
+**/.ipynb_checkpoints
+
+**.ckpt
 **/.ipynb_checkpoints
