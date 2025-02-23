@@ -1,6 +1,9 @@
 import torch
 
 import lightning as pl
+
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, Callback
+
 from torch.utils.data import DataLoader, random_split
 from data_handling.cell_dataset import DistillationDataset, CountingDataset
 from modeling import PointMe, TinyViT
@@ -73,10 +76,20 @@ def train():
 
     print("Successfully loaded the model")
 
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(
+        monitor="val_loss",
+        dirpath="checkpoints",
+        filename="pointme-counting-{epoch:02d}-{val_loss:.2f}",
+        save_top_k=1,
+        mode="min",
+    )
+
+
     trainer = pl.Trainer(
         accelerator="auto",
         max_epochs=2,
         logger=None,
+        callbacks=[checkpoint_callback],
     )
 
     trainer.fit(model, train_loader, val_loader)
